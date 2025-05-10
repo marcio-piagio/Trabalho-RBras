@@ -2,6 +2,13 @@
 # -*-*-*- Rotinas: Estimação por Máxima Verossimilhança para o Modelo Mtb -*-
 # -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*
 
+pacotes <- c("Rcpp", "parallel", "tictoc")
+pacotes_instalar <- pacotes[!pacotes %in% installed.packages()[, "Package"]]
+
+if (length(pacotes_instalar) > 0) {
+  install.packages(pacotes_instalar)
+}
+
 # --- Função para gerar dados de captura e recaptura 
 gera_dados <- function(N,K,pj,c){
   # Inicialização de vetores para armazenar os dados de captura e marcação
@@ -24,7 +31,7 @@ gera_dados <- function(N,K,pj,c){
   return(c(u,m,M,n,r))                # Retorno dos resultados em um vetor
 }
 
-library(Rcpp)
+
 sourceCpp("gera_dados.cpp")  # Importa versão otimizada da função escrita em C++
 
 # --- Função de Log-Verossimilhança do Modelo Mtb
@@ -123,7 +130,7 @@ emv.Mt <- function(PAR, k) {
 N.true <- seq(50,500,50)          # Valores reais do tamanho populacional
 K.true <- seq(5,15,1)             # Número de amostragens variando
 c.true <- seq(-2,2,0.1)           # Valores reais do parâmetro de recaptura
-no.simulation <- 10           # Número de simulações
+no.simulation <- 100000           # Número de simulações
 
 # --- Scenario: teste 
 # N.true <- c(500,1000)
@@ -143,7 +150,7 @@ resultados   <- matrix.N <- matrix.c <-  list()  # Listas para armazenar os resu
 
 library(parallel)
 # --- Configuração do processamento paralelo
-cl <- makeCluster(detectCores() - 3)  # Cria um cluster, deixando 3 núcleos livres para outras tarefas
+cl <- makeCluster(detectCores()/2)  # Cria um cluster, deixando 3 núcleos livres para outras tarefas
 
 # Inicializa os workers do cluster com os pacotes e funções necessárias
 clusterEvalQ(cl, {
@@ -174,9 +181,11 @@ for (k in 1:length(K.true)) {
     fit.c <- matrix(nrow = no.simulation, ncol = 0)
     
     for (i in 1:length(N.true)) {
-      
       # --- Geração dos dados de captura e recaptura
-      dados <- apply(X, 2, function(N, K, pj, c) gera_dados_cpp(N, K, pj, c),
+      dados <- apply(X, 2, function(N, K, pj, c) {
+                                                  set.seed(k*i)
+                                                  gera_dados_cpp(N, K, pj, c)
+                                                  },
                      N=N.true[i], K=K.true[k], c=c.true[j])
       
       # --- Estimação por Máxima Verossimilhança usando os modelos
@@ -241,4 +250,6 @@ tictoc::toc()  # Finaliza a medição do tempo total de execução
 
 stopCluster(cl)
 
-matrix.N[[k]]
+save(resultados, file = "resultados.RData")
+save(matrix.N, file = "matrix.N.RData")
+save(matrix.c, file = "matrix.c.RData")

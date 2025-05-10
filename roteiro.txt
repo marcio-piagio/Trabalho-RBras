@@ -1,0 +1,3 @@
+
+Rscript simulate-melhorado.R
+./salva.sh
